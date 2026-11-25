@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { stopBuzzer } from "@/lib/command";
 import { prisma } from "@/lib/db";
 import { ALERT_STARTED } from "@/lib/events";
 
@@ -22,23 +23,28 @@ export async function POST(
     return NextResponse.json({ error: "Only an alert that started can be acknowledged." }, { status: 409 });
   }
 
-  if (event.acknowledgedAt && event.acknowledgedBy) {
-    return NextResponse.json({
-      acknowledgedAt: event.acknowledgedAt.toISOString(),
-      acknowledgedBy: event.acknowledgedBy,
+  if (!(event.acknowledgedAt && event.acknowledgedBy)) {
+    const saved = await prisma.hazardEvent.update({
+      where: { id },
+      data: {
+        acknowledgedAt: new Date(),
+        acknowledgedBy: session.username,
+      },
     });
+    event.acknowledgedAt = saved.acknowledgedAt;
+    event.acknowledgedBy = saved.acknowledgedBy;
   }
 
-  const saved = await prisma.hazardEvent.update({
-    where: { id },
-    data: {
-      acknowledgedAt: new Date(),
-      acknowledgedBy: session.username,
-    },
-  });
+  let buzzer = true;
+  try {
+    await stopBuzzer(event.zone);
+  } catch {
+    buzzer = false;
+  }
 
   return NextResponse.json({
-    acknowledgedAt: saved.acknowledgedAt?.toISOString() ?? null,
-    acknowledgedBy: saved.acknowledgedBy,
+    acknowledgedAt: event.acknowledgedAt?.toISOString() ?? null,
+    acknowledgedBy: event.acknowledgedBy,
+    buzzer,
   });
 }

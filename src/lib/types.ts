@@ -12,6 +12,7 @@ export type ZoneView = {
   motion: boolean | null;
   alert: boolean;
   sensorFault: boolean;
+  rollingObject: boolean | null;
   updatedAt: string;
   readings: ReadingPoint[];
 };

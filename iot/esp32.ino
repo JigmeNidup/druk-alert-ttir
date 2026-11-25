@@ -130,6 +130,9 @@ void setup() {
   
   setup_wifi();
   mqtt.setServer(mqttBroker, mqttPort);
+  // Default packet buffer is 256 bytes. The JSON plus the ingest key exceeds that,
+  // and publish() then fails without disconnecting.
+  mqtt.setBufferSize(512);
 }
 
 void loop() {
@@ -170,7 +173,6 @@ void loop() {
 
   // --- CONSTRUCT JSON TELEMETRY PAYLOAD ---
   String payload = "{";
-  payload += "\"station\":\"TTI Multi-Array Hub\",";
   payload += "\"flood_dist\":" + String(floodDist, 1) + ",";
   payload += "\"flood_hum\":" + String(floodHum, 1) + ",";
   payload += "\"land_dist\":" + String(landDist, 1) + ",";
@@ -183,9 +185,14 @@ void loop() {
   payload += "\"key\":\"" + String(MQTT_INGEST_KEY) + "\"";
   payload += "}";
 
-  mqtt.publish(mqttTopic, payload.c_str());
-  Serial.printf("[Telemetry Sent] Flood[Dist:%.1f, Hum:%.1f] Land[Dist:%.1f, Hum:%.1f] Trespass[Dist:%.1f, Motion:%d]\n", 
-                floodDist, floodHum, landDist, landHum, trespassDist, motionDetected);
+  bool published = mqtt.publish(mqttTopic, payload.c_str());
+  if (published) {
+    Serial.printf("[Telemetry Sent] %u bytes  Flood[Dist:%.1f, Hum:%.1f] Land[Dist:%.1f, Hum:%.1f] Trespass[Dist:%.1f, Motion:%d]\n",
+                  payload.length(), floodDist, floodHum, landDist, landHum, trespassDist, motionDetected);
+  } else {
+    Serial.printf("[Telemetry FAILED] %u bytes did not fit or the broker rejected them. mqtt state %d\n",
+                  payload.length(), mqtt.state());
+  }
 
   delay(3000);
 }

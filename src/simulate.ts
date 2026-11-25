@@ -23,16 +23,20 @@ const scenes = [
 type Scene = (typeof scenes)[number];
 
 type Packet = {
-  station: string;
   flood_dist: number;
   flood_hum: number | null;
+  rolling_flood_obj: 0 | 1;
   land_dist: number;
   land_hum: number | null;
+  rolling_stone: 0 | 1;
   trespass_dist: number;
   motion: 0 | 1;
   flood_alert: 0 | 1;
   landslide_alert: 0 | 1;
   trespass_alert: 0 | 1;
+  flood_event: "NONE" | "TRIGGERED" | "RESOLVED";
+  landslide_event: "NONE" | "TRIGGERED" | "RESOLVED";
+  trespass_event: "NONE" | "TRIGGERED" | "RESOLVED";
 };
 
 const named = new Set<string>(scenes);
@@ -61,40 +65,49 @@ function drift(center: number, spread: number) {
 
 function packet(scene: Scene): Packet {
   const body: Packet = {
-    station: "TTI Multi-Array Hub",
-    flood_dist: drift(88, 4),
-    flood_hum: drift(42, 3),
-    land_dist: drift(170, 8),
+    flood_dist: drift(120, 4),
+    flood_hum: drift(28, 3),
+    rolling_flood_obj: 0,
+    land_dist: drift(180, 8),
     land_hum: drift(36, 3),
-    trespass_dist: drift(140, 8),
+    rolling_stone: 0,
+    trespass_dist: drift(200, 8),
     motion: 0,
     flood_alert: 0,
     landslide_alert: 0,
     trespass_alert: 0,
+    flood_event: "NONE",
+    landslide_event: "NONE",
+    trespass_event: "NONE",
   };
 
   if (scene === "flood" || scene === "all") {
-    body.flood_dist = drift(18, 4);
-    body.flood_hum = drift(91, 2);
+    body.flood_dist = drift(28, 4);
+    body.flood_hum = drift(55, 3);
+    body.rolling_flood_obj = 1;
     body.flood_alert = 1;
+    body.flood_event = "TRIGGERED";
   }
 
   if (scene === "landslide" || scene === "all") {
-    body.land_dist = drift(75, 8);
-    body.land_hum = drift(88, 2);
+    body.land_dist = drift(12, 2);
+    body.land_hum = drift(40, 3);
+    body.rolling_stone = 1;
     body.landslide_alert = 1;
+    body.landslide_event = "TRIGGERED";
   }
 
   if (scene === "trespass" || scene === "all") {
-    body.trespass_dist = drift(28, 6);
+    body.trespass_dist = drift(45, 6);
     body.motion = 1;
     body.trespass_alert = 1;
+    body.trespass_event = "TRIGGERED";
   }
 
   if (scene === "approach") {
-    body.trespass_dist = drift(32, 5);
+    body.trespass_dist = drift(40, 5);
     body.motion = 0;
-    body.trespass_alert = 1;
+    body.trespass_alert = 0;
   }
 
   if (scene === "blind") {

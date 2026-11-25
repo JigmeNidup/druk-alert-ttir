@@ -25,5 +25,6 @@ export const config = {
     "/api/status",
     "/api/logs/:path*",
     "/api/alerts/:path*",
+    "/api/commands/:path*",
   ],
 };

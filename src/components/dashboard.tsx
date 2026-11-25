@@ -10,7 +10,7 @@ import {
   RESOLVED_UNACKNOWLEDGED,
   isResolvedAction,
 } from "@/lib/events";
-import { CHART_VIEW, chartSegments } from "@/lib/chart";
+import { LiveChart } from "@/components/live-chart";
 import {
   formatDistance,
   formatHumidity,
@@ -39,8 +39,11 @@ export function Dashboard({
   const [expired, setExpired] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [ackingId, setAckingId] = useState<string | null>(null);
+  const [silencing, setSilencing] = useState<string | null>(null);
+  const [silenceNote, setSilenceNote] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(false);
   const [now, setNow] = useState(0);
+  const [graphMinutes, setGraphMinutes] = useState<15 | 60>(15);
   const heard = useRef(new Set<string>());
 
   const unacknowledged = data.events.filter(
@@ -116,6 +119,7 @@ export function Dashboard({
       const saved = (await response.json()) as {
         acknowledgedAt: string | null;
         acknowledgedBy: string | null;
+        buzzer?: boolean;
       };
       setData((current) => ({
         ...current,
@@ -123,8 +127,34 @@ export function Dashboard({
           event.id === id ? { ...event, ...saved } : event,
         ),
       }));
+      if (saved.buzzer === false) {
+        setSilenceNote("The alert is marked seen. The board did not get the stop command.");
+      }
     } finally {
       setAckingId(null);
+    }
+  }
+
+  async function silence(zone: string) {
+    setSilencing(zone);
+    setSilenceNote(null);
+    try {
+      const response = await fetch("/api/commands/silence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zone }),
+      });
+      if (response.status === 401) {
+        setExpired(true);
+        return;
+      }
+      if (!response.ok) {
+        setSilenceNote("The board did not get the stop command.");
+        return;
+      }
+      setSilenceNote("Stop sent. The board clears the buzzer and marks that zone resolved.");
+    } finally {
+      setSilencing(null);
     }
   }
 
@@ -261,24 +291,54 @@ export function Dashboard({
               return (
                 <li key={zone.zone} className="flex flex-wrap items-center justify-between gap-3">
                   <span className="text-sm text-foreground">{zone.name}</span>
-                  {event && !event.acknowledgedAt ? (
-                    <AckButton
-                      pending={ackingId === event.id}
-                      onClick={() => acknowledge(event.id)}
-                    />
-                  ) : event?.acknowledgedBy ? (
-                    <SeenNote event={event} />
-                  ) : null}
+                  <span className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => silence(zone.zone)}
+                      disabled={silencing === zone.zone}
+                      className="rounded-lg border border-hazard/50 px-3 py-1.5 text-sm font-semibold text-hazard disabled:opacity-70"
+                    >
+                      {silencing === zone.zone ? "Stopping..." : "Stop buzzer"}
+                    </button>
+                    {event && !event.acknowledgedAt ? (
+                      <AckButton
+                        pending={ackingId === event.id}
+                        onClick={() => acknowledge(event.id)}
+                      />
+                    ) : event?.acknowledgedBy ? (
+                      <SeenNote event={event} />
+                    ) : (
+                      <span className="text-sm text-muted">Waiting for the log row</span>
+                    )}
+                  </span>
                 </li>
               );
             })}
           </ul>
+          {silenceNote ? <p className="mt-3 text-sm text-muted">{silenceNote}</p> : null}
         </div>
       ) : null}
 
-      <section className="mt-5 grid gap-4 lg:grid-cols-3">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted">Live graphs</p>
+        <div className="flex rounded-lg border border-edge p-0.5">
+          {([15, 60] as const).map((minutes) => (
+            <button
+              key={minutes}
+              type="button"
+              onClick={() => setGraphMinutes(minutes)}
+              className={`rounded-md px-3 py-1 text-sm ${
+                graphMinutes === minutes ? "bg-accent text-[#07111f]" : "text-muted"
+              }`}
+            >
+              {minutes === 15 ? "15 min" : "1 hour"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <section className="mt-3 grid gap-4 lg:grid-cols-3">
         {data.zones.map((zone) => (
-          <ZoneCard key={zone.zone} zone={zone} />
+          <ZoneCard key={zone.zone} zone={zone} now={now} minutes={graphMinutes} />
         ))}
       </section>
 
@@ -351,7 +411,15 @@ export function Dashboard({
   );
 }
 
-function ZoneCard({ zone }: { zone: ZoneView }) {
+function ZoneCard({
+  zone,
+  now,
+  minutes,
+}: {
+  zone: ZoneView;
+  now: number;
+  minutes: 15 | 60;
+}) {
   const tone = zone.alert
     ? "hazard"
     : zone.sensorFault
@@ -417,11 +485,22 @@ function ZoneCard({ zone }: { zone: ZoneView }) {
               value={formatDistance(zone.distanceCm)}
               alert={zone.alert}
             />
-            <Metric label="Humidity" value={formatHumidity(zone.humidityPct)} alert={zone.alert} />
+            <Metric
+              label="Humidity"
+              value={formatHumidity(zone.humidityPct)}
+              alert={zone.kind === "water" && zone.alert}
+            />
+            <Metric
+              label={zone.kind === "water" ? "Passing object" : "Rolling stone"}
+              value={
+                zone.rollingObject == null ? "—" : zone.rollingObject ? "Detected" : "None"
+              }
+              alert={zone.alert && zone.rollingObject === true}
+            />
           </>
         )}
       </dl>
-      <ZoneChart zone={zone} />
+      <ZoneChart zone={zone} now={now} minutes={minutes} />
     </article>
   );
 }
@@ -473,51 +552,47 @@ function SeenNote({ event }: { event: EventView }) {
   );
 }
 
-function ZoneChart({ zone }: { zone: ZoneView }) {
-  const distance = chartSegments(zone.readings, "distanceCm");
-  const humidity = zone.kind === "gate" ? [] : chartSegments(zone.readings, "humidityPct");
-  const empty = distance.length === 0 && humidity.length === 0;
+function liveReadings(zone: ZoneView, now: number, minutes: 15 | 60) {
+  const latest = zone.readings.at(-1)?.recordedAt;
+  const anchor = now || (latest ? Date.parse(latest) : 0);
+  const cutoff = anchor - minutes * 60 * 1000;
+  const recent = zone.readings.filter((point) => Date.parse(point.recordedAt) >= cutoff);
+  if (zone.distanceCm == null && zone.humidityPct == null) return { points: recent, anchor };
+  const tip = {
+    recordedAt: zone.updatedAt,
+    distanceCm: zone.distanceCm,
+    humidityPct: zone.humidityPct,
+  };
+  if (recent.at(-1)?.recordedAt === tip.recordedAt) return { points: recent, anchor };
+  return { points: [...recent, tip], anchor };
+}
+
+function ZoneChart({
+  zone,
+  now,
+  minutes,
+}: {
+  zone: ZoneView;
+  now: number;
+  minutes: 15 | 60;
+}) {
+  const { points, anchor } = liveReadings(zone, now, minutes);
+  const showHumidity = zone.kind !== "gate";
 
   return (
     <div className="mt-4">
-      {empty ? (
-        <p className="text-xs text-muted">History appears after the first minute of readings.</p>
-      ) : (
-        <svg
-          viewBox={`0 0 ${CHART_VIEW.width} ${CHART_VIEW.height}`}
-          className="h-16 w-full"
-          role="img"
-          aria-label={`${zone.name} readings for the last hour`}
-        >
-          {distance.map((points) => (
-            <polyline
-              key={`d-${points}`}
-              points={points}
-              fill="none"
-              stroke="#7cb3ff"
-              strokeWidth="2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ))}
-          {humidity.map((points) => (
-            <polyline
-              key={`h-${points}`}
-              points={points}
-              fill="none"
-              stroke="#fbbf24"
-              strokeWidth="2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ))}
-        </svg>
-      )}
-      <p className="mt-1 text-[11px] tracking-wide text-muted uppercase">
-        Last hour
-        <span className="ml-2 text-accent">Distance</span>
-        {zone.kind === "gate" ? null : <span className="ml-2 text-standby">Humidity</span>}
-      </p>
+      <div className="mb-1 flex items-center gap-3 text-[11px] tracking-wide text-muted uppercase">
+        <span className="text-accent">Distance cm</span>
+        {showHumidity ? <span className="text-standby">Humidity %</span> : null}
+      </div>
+      <LiveChart
+        zoneId={zone.zone}
+        name={zone.name}
+        points={points}
+        showHumidity={showHumidity}
+        startMs={anchor - minutes * 60 * 1000}
+        endMs={anchor}
+      />
     </div>
   );
 }

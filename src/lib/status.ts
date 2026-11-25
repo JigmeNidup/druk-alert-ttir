@@ -35,6 +35,7 @@ export async function getStatus(): Promise<StatusPayload> {
         motion: row?.motion ?? null,
         alert: row?.alert ?? false,
         sensorFault: row?.sensorFault ?? false,
+        rollingObject: row?.rollingObject ?? null,
         updatedAt: (row?.updatedAt ?? new Date(0)).toISOString(),
         readings: readings
           .filter((reading) => reading.zone === zone.id)

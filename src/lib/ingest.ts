@@ -8,7 +8,7 @@ import { distanceSample, flag, humiditySample, motion } from "./telemetry";
 import type { RaisedAlert } from "./types";
 import { CLEAR_STATUS, SENSOR_OFFLINE, zoneById, type ZoneId } from "./zones";
 
-const SAMPLE_INTERVAL_MS = 60_000;
+const SAMPLE_INTERVAL_MS = 5_000;
 const HISTORY_WINDOW_MS = 70 * 60 * 1000;
 
 type ZoneSnapshot = {
@@ -18,6 +18,7 @@ type ZoneSnapshot = {
   distanceCm: number | null;
   humidityPct: number | null;
   motion: boolean | null;
+  rollingObject: boolean | null;
 };
 
 export async function ingestTelemetry(payload: Record<string, unknown>) {
@@ -39,14 +40,16 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
       distanceCm: floodDistance.value,
       humidityPct: floodHumidity.value,
       motion: null,
+      rollingObject: flag(payload.rolling_flood_obj),
     },
     {
       zone: "landslide",
       alert: landslide,
-      sensorFault: landDistance.failed || landHumidity.failed,
+      sensorFault: landDistance.failed,
       distanceCm: landDistance.value,
       humidityPct: landHumidity.value,
       motion: null,
+      rollingObject: flag(payload.rolling_stone),
     },
     {
       zone: "trespass",
@@ -55,14 +58,21 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
       distanceCm: gateDistance.value,
       humidityPct: null,
       motion: gateMotion,
+      rollingObject: null,
     },
   ];
 
   return prisma.$transaction(async (tx) => {
     const existing = await tx.zoneStatus.findMany();
     const previous = new Map(existing.map((row) => [row.zone, row.alert]));
+    const latestRows = await tx.zoneReading.findMany({
+      distinct: ["zone"],
+      orderBy: [{ zone: "asc" }, { recordedAt: "desc" }],
+    });
+    const latestByZone = new Map(latestRows.map((row) => [row.zone, row]));
     const raised: RaisedAlert[] = [];
     const now = new Date();
+    let sampled = false;
 
     for (const snapshot of snapshots) {
       const meta = zoneById(snapshot.zone);
@@ -83,6 +93,7 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
           motion: snapshot.motion,
           alert: snapshot.alert,
           sensorFault: snapshot.sensorFault,
+          rollingObject: snapshot.rollingObject,
         },
         create: {
           zone: snapshot.zone,
@@ -93,13 +104,11 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
           motion: snapshot.motion,
           alert: snapshot.alert,
           sensorFault: snapshot.sensorFault,
+          rollingObject: snapshot.rollingObject,
         },
       });
 
-      const latest = await tx.zoneReading.findFirst({
-        where: { zone: snapshot.zone },
-        orderBy: { recordedAt: "desc" },
-      });
+      const latest = latestByZone.get(snapshot.zone);
       const minuteElapsed =
         !latest || now.getTime() - latest.recordedAt.getTime() >= SAMPLE_INTERVAL_MS;
       const stateChanged =
@@ -115,15 +124,11 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
             motion: snapshot.motion,
             alert: snapshot.alert,
             sensorFault: snapshot.sensorFault,
+            rollingObject: snapshot.rollingObject,
             recordedAt: now,
           },
         });
-        await tx.zoneReading.deleteMany({
-          where: {
-            zone: snapshot.zone,
-            recordedAt: { lt: new Date(now.getTime() - HISTORY_WINDOW_MS) },
-          },
-        });
+        sampled = true;
       }
 
       if (snapshot.alert && !previous.get(snapshot.zone)) {
@@ -187,6 +192,12 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
       }
     }
 
+    if (sampled) {
+      await tx.zoneReading.deleteMany({
+        where: { recordedAt: { lt: new Date(now.getTime() - HISTORY_WINDOW_MS) } },
+      });
+    }
+
     return raised;
-  });
+  }, { maxWait: 10_000, timeout: 20_000 });
 }

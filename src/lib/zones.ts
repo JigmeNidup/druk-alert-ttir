@@ -5,7 +5,7 @@ export const ZONES = [
     hazard: "Trespass",
     kind: "gate",
     alertStatus: "Trespass detected",
-    summary: "Motion at the gate, or an approach closer than 50 cm.",
+    summary: "Motion and a person between 10 and 90 cm. The buzzer holds for 13 seconds.",
   },
   {
     id: "landslide",
@@ -13,7 +13,7 @@ export const ZONES = [
     hazard: "Landslide",
     kind: "slope",
     alertStatus: "Landslide hazard",
-    summary: "Humidity above 80% and slope movement between 40 and 120 cm.",
+    summary: "A stone between 2 and 50 cm that shifts by 3 cm, or sits at 15 cm or closer. The buzzer holds for 9 seconds.",
   },
   {
     id: "flood",
@@ -21,7 +21,7 @@ export const ZONES = [
     hazard: "Flood",
     kind: "water",
     alertStatus: "Flood hazard",
-    summary: "Humidity above 80% and water closer than 40 cm.",
+    summary: "Humidity at 40% or more, water between 4 and 60 cm, and a passing object. The buzzer holds for 5 seconds.",
   },
 ] as const;
 

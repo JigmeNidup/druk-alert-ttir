@@ -23,9 +23,10 @@ model ZoneStatus {
   distanceCm  Float?
   humidityPct Float?
   motion      Boolean?
-  alert       Boolean  @default(false)
-  sensorFault Boolean  @default(false)
-  updatedAt   DateTime @updatedAt
+  alert         Boolean  @default(false)
+  sensorFault   Boolean  @default(false)
+  rollingObject Boolean?
+  updatedAt     DateTime @updatedAt
 }
 
 model HazardEvent {
@@ -52,9 +53,10 @@ model ZoneReading {
   distanceCm  Float?
   humidityPct Float?
   motion      Boolean?
-  alert       Boolean
-  sensorFault Boolean
-  recordedAt  DateTime @default(now())
+  alert         Boolean
+  sensorFault   Boolean
+  rollingObject Boolean?
+  recordedAt    DateTime @default(now())
 
   @@index([zone, recordedAt])
 }
