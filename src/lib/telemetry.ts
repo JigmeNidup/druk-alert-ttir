@@ -14,9 +14,7 @@ export function parseTelemetry(raw: string): Record<string, unknown> | null {
 
 export function isEspPayload(data: Record<string, unknown>) {
   return (
-    "flood_alert" in data &&
-    "landslide_alert" in data &&
-    "trespass_alert" in data
+    "flood_alert" in data && "trespass_alert" in data
   );
 }
 

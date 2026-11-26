@@ -1,6 +1,6 @@
 import mqtt from "mqtt";
 
-const ZONES = new Set(["flood", "landslide", "trespass"]);
+const ZONES = new Set(["flood", "trespass"]);
 
 export async function stopBuzzer(zone: string) {
   if (!ZONES.has(zone)) return;

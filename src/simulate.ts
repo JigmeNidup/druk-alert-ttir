@@ -6,19 +6,7 @@ const topic = process.env.MQTT_TOPIC || "drukalert/zone/telemetry";
 const intervalMs = 3000;
 const repeatsPerScene = 2;
 
-const scenes = [
-  "clear",
-  "flood",
-  "clear",
-  "landslide",
-  "clear",
-  "trespass",
-  "clear",
-  "approach",
-  "clear",
-  "blind",
-  "all",
-] as const;
+const scenes = ["clear", "flood", "clear", "trespass", "clear", "approach", "clear", "blind", "all"] as const;
 
 type Scene = (typeof scenes)[number];
 
@@ -26,16 +14,11 @@ type Packet = {
   flood_dist: number;
   flood_hum: number | null;
   rolling_flood_obj: 0 | 1;
-  land_dist: number;
-  land_hum: number | null;
-  rolling_stone: 0 | 1;
   trespass_dist: number;
   motion: 0 | 1;
   flood_alert: 0 | 1;
-  landslide_alert: 0 | 1;
   trespass_alert: 0 | 1;
   flood_event: "NONE" | "TRIGGERED" | "RESOLVED";
-  landslide_event: "NONE" | "TRIGGERED" | "RESOLVED";
   trespass_event: "NONE" | "TRIGGERED" | "RESOLVED";
 };
 
@@ -68,16 +51,11 @@ function packet(scene: Scene): Packet {
     flood_dist: drift(120, 4),
     flood_hum: drift(28, 3),
     rolling_flood_obj: 0,
-    land_dist: drift(180, 8),
-    land_hum: drift(36, 3),
-    rolling_stone: 0,
     trespass_dist: drift(200, 8),
     motion: 0,
     flood_alert: 0,
-    landslide_alert: 0,
     trespass_alert: 0,
     flood_event: "NONE",
-    landslide_event: "NONE",
     trespass_event: "NONE",
   };
 
@@ -87,14 +65,6 @@ function packet(scene: Scene): Packet {
     body.rolling_flood_obj = 1;
     body.flood_alert = 1;
     body.flood_event = "TRIGGERED";
-  }
-
-  if (scene === "landslide" || scene === "all") {
-    body.land_dist = drift(12, 2);
-    body.land_hum = drift(40, 3);
-    body.rolling_stone = 1;
-    body.landslide_alert = 1;
-    body.landslide_event = "TRIGGERED";
   }
 
   if (scene === "trespass" || scene === "all") {
@@ -113,12 +83,9 @@ function packet(scene: Scene): Packet {
   if (scene === "blind") {
     body.flood_dist = -1;
     body.flood_hum = null;
-    body.land_dist = -1;
-    body.land_hum = null;
     body.trespass_dist = -1;
     body.motion = 0;
     body.flood_alert = 0;
-    body.landslide_alert = 0;
     body.trespass_alert = 0;
   }
 
@@ -128,11 +95,10 @@ function packet(scene: Scene): Packet {
 function label(body: Packet) {
   const active = [
     body.flood_alert ? "flood" : "",
-    body.landslide_alert ? "landslide" : "",
     body.trespass_alert ? "trespass" : "",
   ].filter(Boolean);
   if (active.length) return active.join("+");
-  if (body.flood_dist < 0 || body.land_dist < 0 || body.trespass_dist < 0) return "blind";
+  if (body.flood_dist < 0 || body.trespass_dist < 0) return "blind";
   return "clear";
 }
 
@@ -175,7 +141,7 @@ function publishOne() {
       return;
     }
     console.log(
-      `[sim] ${label(body)}  flood ${body.flood_dist}cm/${body.flood_hum}%  land ${body.land_dist}cm/${body.land_hum}%  gate ${body.trespass_dist}cm motion ${body.motion}`,
+      `[sim] ${label(body)}  flood ${body.flood_dist}cm/${body.flood_hum}%  gate ${body.trespass_dist}cm motion ${body.motion}`,
     );
     if (singlePacket) shutdown();
   });
@@ -192,7 +158,7 @@ client.on("connect", () => {
   console.log(`[sim] Publishing to ${broker}:${port} ${topic} every ${intervalMs / 1000}s`);
   console.log(
     mode === "tour"
-      ? "[sim] Tour: clear, flood, landslide, trespass, approach, blind sensors, then all three. Ctrl+C to stop."
+      ? "[sim] Tour: clear, flood, trespass, approach, blind sensors, then both alerts. Ctrl+C to stop."
       : `[sim] Holding "${mode}".${singlePacket ? " One packet, then exit." : " Ctrl+C to stop."}`,
   );
   publishOne();

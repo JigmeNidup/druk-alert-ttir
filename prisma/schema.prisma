@@ -37,7 +37,6 @@ model HazardEvent {
   humidityPct Float?
   motion      Boolean?
   flood       Boolean
-  landslide   Boolean
   trespass    Boolean
   action          String
   acknowledgedAt  DateTime?

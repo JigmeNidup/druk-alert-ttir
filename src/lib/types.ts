@@ -32,7 +32,6 @@ export type EventView = {
   humidityPct: number | null;
   motion: boolean | null;
   flood: boolean;
-  landslide: boolean;
   trespass: boolean;
   action: string;
   acknowledgedAt: string | null;

@@ -1,8 +1,22 @@
 import mqtt from "mqtt";
 import { prisma } from "../lib/db";
+import {
+  ALERT_STARTED,
+  RESOLVED_ACKNOWLEDGED,
+  RESOLVED_UNACKNOWLEDGED,
+} from "../lib/events";
 import { ingestTelemetry } from "../lib/ingest";
 import { sendTelegramAlert, telegramEnabled } from "../lib/telegram";
-import { ingestAuthorized, isEspPayload, parseTelemetry } from "../lib/telemetry";
+import {
+  distanceSample,
+  flag,
+  humiditySample,
+  ingestAuthorized,
+  isEspPayload,
+  parseTelemetry,
+} from "../lib/telemetry";
+import type { RaisedAlert } from "../lib/types";
+import { zoneById } from "../lib/zones";
 
 const broker = process.env.MQTT_BROKER || "broker.hivemq.com";
 const port = Number(process.env.MQTT_PORT || 1883);
@@ -20,6 +34,7 @@ const client = mqtt.connect(`mqtt://${broker}:${port}`, {
 });
 
 let chain: Promise<void> = Promise.resolve();
+const telegramSent = new Set<string>();
 
 client.on("connect", () => {
   console.log(`[mqtt] Connected to ${broker}:${port}`);
@@ -67,23 +82,87 @@ async function handleMessage(raw: string) {
     return;
   }
 
-  const raised = await ingestTelemetry(payload);
+  let raisedZones: string[] = [];
+  try {
+    const raised = await ingestTelemetry(payload);
+    raisedZones = raised.map((alert) => alert.zone);
+  } catch (error) {
+    console.error("[mqtt] Failed to store telemetry.", error);
+  }
+
   const flood = payload.flood_alert ?? 0;
-  const landslide = payload.landslide_alert ?? 0;
   const trespass = payload.trespass_alert ?? 0;
   console.log(
-    `[mqtt] flood=${flood} landslide=${landslide} trespass=${trespass}${
-      raised.length ? ` new=${raised.map((alert) => alert.zone).join(",")}` : ""
+    `[mqtt] flood=${flood} trespass=${trespass}${
+      raisedZones.length ? ` new=${raisedZones.join(",")}` : ""
     }`,
   );
 
-  for (const alert of raised) {
+  await deliverOpenAlerts(payload);
+}
+
+const ACTIVE_ZONES = [
+  ["flood", "flood_alert", "flood_dist", "flood_hum"],
+  ["trespass", "trespass_alert", "trespass_dist", ""],
+] as const;
+
+async function deliverOpenAlerts(payload: Record<string, unknown>) {
+  for (const [zone, alertKey, distanceKey, humidityKey] of ACTIVE_ZONES) {
+    if (!flag(payload[alertKey])) {
+      telegramSent.delete(`${zone}:live`);
+      continue;
+    }
+
+    const open = await openAlertId(zone);
+    const key = open ?? `${zone}:live`;
+    if (telegramSent.has(key)) continue;
+
     try {
-      await sendTelegramAlert(alert);
+      const delivered = await sendTelegramAlert(alertFor(zone, distanceKey, humidityKey, payload));
+      if (!delivered) continue;
+      telegramSent.add(key);
+      console.log(`[telegram] Sent ${zone}.`);
     } catch (error) {
-      console.error("[telegram]", error);
+      console.error("[telegram]", error instanceof Error ? error.message : "Send failed.");
     }
   }
+}
+
+async function openAlertId(zone: string) {
+  try {
+    const started = await prisma.hazardEvent.findFirst({
+      where: { zone, action: ALERT_STARTED },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!started) return null;
+    const resolved = await prisma.hazardEvent.findFirst({
+      where: {
+        zone,
+        createdAt: { gt: started.createdAt },
+        action: { in: [RESOLVED_ACKNOWLEDGED, RESOLVED_UNACKNOWLEDGED] },
+      },
+    });
+    return resolved ? null : started.id;
+  } catch (error) {
+    console.error("[telegram] Could not read the open alert.", error instanceof Error ? error.message : "");
+    return null;
+  }
+}
+
+function alertFor(
+  zone: string,
+  distanceKey: string,
+  humidityKey: string,
+  payload: Record<string, unknown>,
+): RaisedAlert {
+  const meta = zoneById(zone);
+  return {
+    zone,
+    zoneName: meta?.name ?? zone,
+    status: meta?.alertStatus ?? "Alert",
+    distanceCm: distanceSample(payload[distanceKey]).value,
+    humidityPct: humidityKey ? humiditySample(payload[humidityKey]).value : null,
+  };
 }
 
 async function shutdown() {

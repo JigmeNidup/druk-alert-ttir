@@ -1,8 +1,8 @@
 # DrukAlert console
 
-Next.js console for TTI Rangjung's three-zone hazard monitor. The ESP32 publishes one JSON packet to HiveMQ. A worker stores it in PostgreSQL, and this app shows the gate, the mountain, and the river.
+Next.js console for TTI Rangjung's two-zone hazard monitor. The ESP32 publishes one JSON packet to HiveMQ. A worker stores it in PostgreSQL, and this app shows the gate and the river.
 
-The zones are TTIR Main Gate (trespass), Mountain Above TTIR Gate (landslide), and River Alongside Railing (flood).
+The zones are TTIR Main Gate (trespass) and River Alongside Railing (flood).
 
 ## Run
 
@@ -14,7 +14,7 @@ The zones are TTIR Main Gate (trespass), Mountain Above TTIR Gate (landslide), a
 6. Start ingestion in a second terminal: `npm run worker`.
 7. Open http://localhost:3000 and sign in as `admin` with `ADMIN_PASSWORD` from `.env`.
 
-`npm run db:reset` drops the database, reapplies the migrations, and seeds again. Hazard events, readings, and zone status are cleared. The admin user and the three zones are recreated.
+`npm run db:reset` drops the database, reapplies the migrations, and seeds again. Hazard events, readings, and zone status are cleared. The admin user and the two zones are recreated.
 
 ## Vercel and Prisma Postgres
 
@@ -82,7 +82,7 @@ The board polls every 2 seconds. A zone is **Live** when a packet arrived in the
 - An alert turns the zone card red, writes a hazard-log row, and plays a two-tone browser sound after the operator allows audio. The sound repeats until the alert is acknowledged. **Acknowledge** stores the signed-in username and the time, and tells the board to stop that zone’s buzzer. The first person to mark it seen is kept. **Stop buzzer** sends the same stop without marking the alert seen.
 - When that zone returns to normal, the log gets a **Resolved** row. It says **Acknowledged first** or **Not acknowledged**, based on whether anyone had marked the alert seen before it cleared.
 - A failed distance is **Sensor offline**. On the river, a failed humidity read is offline too. The header says **Sensor fault** while nothing is alerting. A blind gate sensor does not look clear.
-- Each card draws a live graph for the last 15 minutes or the last hour. Time runs along the bottom, distance uses the left scale in centimetres, and humidity uses the right scale from 0 to 100. Point at the line to read the exact time and values. Readings are saved about every 5 seconds, and also when the zone changes state, and kept for about an hour. The river card also shows a passing object. The mountain card shows a rolling stone.
+- Each card draws a live graph for the last 15 minutes or the last hour. Time runs along the bottom, distance uses the left scale in centimetres, and humidity on the river uses the right scale from 0 to 100. Point at the line to read the exact time and values. Readings are saved about every 5 seconds, and also when the zone changes state, and kept for about an hour. The river card also shows a passing object.
 - **Download CSV** exports the full hazard log, including who acknowledged each alert and when.
 
 ## Telegram
@@ -93,14 +93,14 @@ Alerts are sent only when both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are s
 
 ## Firmware
 
-Flash `iot/esp32_new.ino`. Fill in `ssid`, `password`, and `MQTT_INGEST_KEY` at the top. The ingest key must be the same value as `MQTT_INGEST_KEY` in `.env`.
+Flash `iot/esp32_v2.ino`. Fill in `ssid`, `password`, and `MQTT_INGEST_KEY` at the top. The ingest key must be the same value as `MQTT_INGEST_KEY` in `.env`.
 
-The board publishes every 2.5 seconds. Flood needs humidity at 40% or more, water between 4 and 60 cm, and a passing object. Landslide needs a stone between 2 and 50 cm that shifts, or one at 15 cm or closer. Trespass needs motion and a person between 10 and 90 cm. The board rings for 5, 9, and 13 seconds. It listens on `drukalert/zone/cmd` for `stop_buzzer` plus the zone name. Set `MQTT_CMD_TOPIC` only if that topic changes.
+The board publishes every 2.5 seconds. Flood needs humidity at 40% or more, water between 2 and 50 cm, and a passing object. Trespass needs motion and a person between 10 and 90 cm. The board rings for 5 seconds on a flood and 13 seconds on a trespass. It listens on `drukalert/zone/cmd` for `stop_buzzer` plus the zone name. Set `MQTT_CMD_TOPIC` only if that topic changes.
 
 The broker is public, so it will accept a packet from anyone. The worker drops any packet that does not carry this key. Reflash the board after changing the key, or live readings will be refused.
 
 ## Test without the board
 
-`npm run simulate` publishes a loop of scenes every 3 seconds: clear, flood, landslide, trespass, approach, blind sensors, then all three alerts.
+`npm run simulate` publishes a loop of scenes every 3 seconds: clear, flood, trespass, approach, blind sensors, then both alerts.
 
-Hold one scene with `npm run simulate -- flood`, or send a single packet with `npm run simulate -- clear --once`. Scenes: `clear`, `flood`, `landslide`, `trespass`, `approach`, `blind`, `all`.
+Hold one scene with `npm run simulate -- flood`, or send a single packet with `npm run simulate -- clear --once`. Scenes: `clear`, `flood`, `trespass`, `approach`, `blind`, `all`.

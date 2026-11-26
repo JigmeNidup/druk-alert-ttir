@@ -23,12 +23,9 @@ type ZoneSnapshot = {
 
 export async function ingestTelemetry(payload: Record<string, unknown>) {
   const flood = flag(payload.flood_alert);
-  const landslide = flag(payload.landslide_alert);
   const trespass = flag(payload.trespass_alert);
   const floodDistance = distanceSample(payload.flood_dist);
   const floodHumidity = humiditySample(payload.flood_hum);
-  const landDistance = distanceSample(payload.land_dist);
-  const landHumidity = humiditySample(payload.land_hum);
   const gateDistance = distanceSample(payload.trespass_dist);
   const gateMotion = motion(payload.motion);
 
@@ -41,15 +38,6 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
       humidityPct: floodHumidity.value,
       motion: null,
       rollingObject: flag(payload.rolling_flood_obj),
-    },
-    {
-      zone: "landslide",
-      alert: landslide,
-      sensorFault: landDistance.failed,
-      distanceCm: landDistance.value,
-      humidityPct: landHumidity.value,
-      motion: null,
-      rollingObject: flag(payload.rolling_stone),
     },
     {
       zone: "trespass",
@@ -140,7 +128,6 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
             humidityPct: snapshot.humidityPct,
             motion: snapshot.motion,
             flood,
-            landslide,
             trespass,
             action: ALERT_STARTED,
           },
@@ -180,7 +167,6 @@ export async function ingestTelemetry(payload: Record<string, unknown>) {
                 humidityPct: snapshot.humidityPct,
                 motion: snapshot.motion,
                 flood,
-                landslide,
                 trespass,
                 action: acknowledged ? RESOLVED_ACKNOWLEDGED : RESOLVED_UNACKNOWLEDGED,
                 acknowledgedAt: acknowledged ? started.acknowledgedAt : null,

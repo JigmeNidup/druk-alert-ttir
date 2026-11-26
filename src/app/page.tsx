@@ -35,8 +35,7 @@ function LoginFrame({ checking = false }: { checking?: boolean }) {
         </div>
       </div>
       <p className="mb-6 text-sm leading-6 text-muted">
-        Zone monitoring for the main gate, the mountain above it, and the river
-        along the railing.
+        Zone monitoring for the main gate and the river along the railing.
       </p>
       {checking ? (
         <p className="text-sm text-muted">Checking session...</p>

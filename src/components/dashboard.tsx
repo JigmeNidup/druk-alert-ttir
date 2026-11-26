@@ -336,7 +336,7 @@ export function Dashboard({
           ))}
         </div>
       </div>
-      <section className="mt-3 grid gap-4 lg:grid-cols-3">
+      <section className="mt-3 grid gap-4 lg:grid-cols-2">
         {data.zones.map((zone) => (
           <ZoneCard key={zone.zone} zone={zone} now={now} minutes={graphMinutes} />
         ))}
@@ -641,7 +641,7 @@ function ZoneMark({ kind, alert }: { kind: ZoneView["kind"]; alert: boolean }) {
   const color = alert ? "text-hazard" : "text-accent";
   return (
     <span className={`grid h-10 w-10 place-items-center rounded-xl bg-background/60 ${color}`}>
-      {kind === "water" ? <WaterIcon /> : kind === "slope" ? <SlopeIcon /> : <GateIcon />}
+      {kind === "water" ? <WaterIcon /> : <GateIcon />}
     </span>
   );
 }
@@ -651,14 +651,6 @@ function GateIcon() {
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <path d="M3 17V5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5V17" stroke="currentColor" strokeWidth="1.6" />
       <path d="M3 17h14M10 4v13M7 9h.01M13 9h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SlopeIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M2 16 8.5 6l3 4.5L14 8l4 8H2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
     </svg>
   );
 }

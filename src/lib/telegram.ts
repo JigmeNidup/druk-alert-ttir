@@ -20,14 +20,14 @@ type TelegramUpdate = {
 export async function sendTelegramAlert(alert: RaisedAlert) {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   const configured = process.env.TELEGRAM_CHAT_ID?.trim();
-  if (!token || !configured) return;
+  if (!token || !configured) return false;
 
   const chatId = await resolveChatId(token, configured);
   if (!chatId) {
     console.warn(
       `[telegram] No chat found. Open ${telegramBotLink()} and send a message, or set TELEGRAM_CHAT_ID to a numeric chat id.`,
     );
-    return;
+    return false;
   }
 
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -51,6 +51,7 @@ export async function sendTelegramAlert(alert: RaisedAlert) {
         : `Telegram request failed (${response.status}).`,
     );
   }
+  return true;
 }
 
 export function telegramEnabled() {

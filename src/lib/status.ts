@@ -55,7 +55,6 @@ export async function getStatus(): Promise<StatusPayload> {
       humidityPct: event.humidityPct,
       motion: event.motion,
       flood: event.flood,
-      landslide: event.landslide,
       trespass: event.trespass,
       action: event.action,
       acknowledgedAt: event.acknowledgedAt?.toISOString() ?? null,

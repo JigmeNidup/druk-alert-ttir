@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { stopBuzzer } from "@/lib/command";
 
-const ZONES = new Set(["flood", "landslide", "trespass"]);
+const ZONES = new Set(["flood", "trespass"]);
 
 export async function POST(request: Request) {
   const session = await getSession();

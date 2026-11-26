@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: "DrukAlert",
     template: "%s · DrukAlert",
   },
-  description: "TTI Rangjung zone monitoring for flood, landslide, and trespass.",
+  description: "TTI Rangjung zone monitoring for flood and trespass.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
